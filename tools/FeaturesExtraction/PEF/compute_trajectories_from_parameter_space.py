@@ -32,6 +32,8 @@ def compute_features_trajectories(args):
                                 for a in range(points):
                                     features[a, idx] = diffs[a]
 
+                                prev_points_data = points_data
+
                         features_norm1 = features.copy()
                         features_norm2 = features.copy()
                         # Here normalize1
@@ -40,6 +42,8 @@ def compute_features_trajectories(args):
                                 s = np.sum(abs(features_norm1[y, :, k]))
                                 if s != 0:
                                     features_norm1[y, :, k] = features_norm1[y, :, k] / s
+                                else:
+                                    print(s)
 
                         # Here normalize 2
                         for y in range(points):
@@ -67,9 +71,9 @@ def compute_displacement_space_param(prev_body_parts, body_parts):
     diffs = np.zeros(shape=(14, 2))
     for x in range(14):
         x1 = prev_body_parts[x][0]
-        y1 = prev_body_parts[x][1]
+        y1 = prev_body_parts[x][3]
         x2 = body_parts[x][0]
-        y2 = body_parts[x][1]
+        y2 = body_parts[x][3]
         diffs[x, :] = (x2 - x1, y2 - y1)
 
     return diffs

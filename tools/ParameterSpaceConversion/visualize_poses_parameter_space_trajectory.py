@@ -52,10 +52,6 @@ def main():
                         default='2DPoses',
                         help="Name of directory to output computed features.")
 
-    parser.add_argument("--output_dir", type=str,
-                        default='2DPoses_SpaceParam',
-                        help="Name of directory to output computed features.")
-
     parser.add_argument("--output_images_dir", type=str,
                         default='2DPoses_SpaceParam_Images',
                         help="Name of directory to output Parameter Space images.")
@@ -68,17 +64,17 @@ def main():
                         default='320',
                         help="(Frame Size)Image width to compute max distance in Parameter Space.")
 
-    parser.add_argument("--save_image", type=int,
-                        default='1',
-                        help="Whether save image with points in Parameter Space.")
-
     parser.add_argument("--draw_body_ids", type=int,
                         default='1',
                         help="Whether draw body joint ids in image with points in Parameter Space.")
 
-    parser.add_argument("--perform_minmax", type=int,
-                        default='0',
-                        help="Whether perform Min Max Scaler in data.")
+    parser.add_argument("--number_frames", type=int,
+                        default=20,
+                        help="Number of frames to extract features.")
+
+    parser.add_argument("--stride", type=int,
+                        default=1,
+                        help="Stride to compute features from the frames.")
 
     args = parser.parse_args()
     convert_parameter_space(args)
@@ -86,56 +82,64 @@ def main():
 
 def convert_parameter_space(args):
     # here compute image diagonal = max distance in Parameter Space
-    max_distance = int(((args.image_height**2) + (args.image_width**2))**(1/2))
+    max_distance = int(((args.image_height ** 2) + (args.image_width ** 2)) ** (1 / 2))
     print(max_distance)
 
     thetas = np.linspace(-np.pi / 2, np.pi / 2, 180)
 
-    poses_dir = os.path.join(args.poses_base_dir, args.input_dir)
+    #poses_dir = os.path.join(args.poses_base_dir, args.input_dir)
 
-    frames_ctd = 0
-    poses_files = sorted(glob.glob(poses_dir + "/**/*.json", recursive=True))
-    print('Frames to process: %i' % len(poses_files))
-    for poses_file in poses_files:
-        if frames_ctd % 100 == 0:
-            print('Frame: %i from: %i' % (frames_ctd, len(poses_files)))
-            print(poses_file)
+    points = 14
+    for root, directories, filenames in os.walk(os.path.join(args.poses_base_dir, args.input_dir)):
+        for directory in directories:
+            video_dir = os.path.join(root, directory)
+            print(video_dir)
+            frames = sorted(glob.glob(video_dir + '/*.json'))
+            if len(frames) > 0:
+                for x in range(0, len(frames), args.stride):
+                    if x + args.number_frames < len(frames):
+                        img_parameter_traj = {}
+                        draw = {}
+                        for u in range(14):
+                            img_parameter_traj[u] = Image.new('RGB', (180 + 20, int(max_distance)), color='black')
+                            draw[u] = ImageDraw.Draw(img_parameter_traj[u])
 
-        body_parts = read_body_parts_file(poses_file)
-        if len(body_parts) > 0:
-            file_name_points = os.path.basename(poses_file)
-            points_space_parameter_dir = poses_file.replace(args.input_dir, args.output_dir)
-            points_space_parameter_dir = os.path.dirname(points_space_parameter_dir)
-            points_space_parameter_name = os.path.join(points_space_parameter_dir, file_name_points)
-            if not os.path.exists(points_space_parameter_dir):
-                os.makedirs(points_space_parameter_dir)
+                        prev_points_parameter_space = None
+                        for y in range(x, x + args.number_frames + 1):
+                            body_parts = read_body_parts_file(frames[y])
+                            if len(body_parts) > 0:
+                                # compute parameter space points and draw image with points
+                                points_parameter_space = \
+                                    compute_parameter_space(body_parts, max_distance, thetas)
 
-            # compute parameter space points and draw image with points
-            img_parameter_space, points_parameter_space \
-                = compute_parameter_space(body_parts, max_distance, thetas, args.draw_body_ids)
+                                if prev_points_parameter_space is None:
+                                    prev_points_parameter_space = points_parameter_space
+                                else:
+                                    for a in range(len(points_parameter_space)):
+                                    #for a in [2,3,4,5]:
+                                    #if 1 == 1:
+                                        #a = 4
+                                        x1 = prev_points_parameter_space[a][0]
+                                        y1 = prev_points_parameter_space[a][1]
+                                        x2 = points_parameter_space[a][0]
+                                        y2 = points_parameter_space[a][1]
+                                        color_id = points_parameter_space[a][2]
+                                        shape = (x1, y1, x2, y2)
+                                        draw[a].line(shape, fill=get_color(color_id))
+                                        e_size = 2
+                                        draw[a].ellipse((x1 - e_size, abs(y1) - e_size, x1 + e_size, abs(y1) + e_size),
+                                                     fill=get_color(color_id))
+                                        draw[a].ellipse((x2 - e_size, abs(y2) - e_size, x2 + e_size, abs(y2) + e_size),
+                                                     fill=get_color(color_id))
+                                    prev_points_parameter_space = points_parameter_space
 
-            if args.perform_minmax:
-                scaler = MinMaxScaler()
-                scaler.fit(np.array(list(points_parameter_space.values())))
-                a = scaler.transform(np.array(list(points_parameter_space.values())))
-                #points_parameter_space_norm = {}
-                for i in range(0, 14, 1):
-                    points_parameter_space[i] = tuple(a[i])
-
-            with open(points_space_parameter_name, 'w') as fjson:
-                json.dump(points_parameter_space, fjson)
-
-            if args.save_image:
-                file_name_img = os.path.basename(poses_file)
-                file_name_img = file_name_img.replace('_keypoints.json', '.png')
-                img_space_parameter_dir = poses_file.replace(args.input_dir, args.output_images_dir)
-                img_space_parameter_dir = os.path.dirname(img_space_parameter_dir)
-                img_space_parameter_full_name = os.path.join(img_space_parameter_dir, file_name_img)
-                if not os.path.exists(img_space_parameter_dir):
-                    os.makedirs(img_space_parameter_dir)
-                img_parameter_space.save(img_space_parameter_full_name)
-
-        frames_ctd = frames_ctd + 1
+                        images_dir = video_dir.replace(args.input_dir, args.output_images_dir)
+                        #images_dir, video_name = os.path.split(images_dir)
+                        if not os.path.exists(images_dir):
+                            os.makedirs(images_dir)
+                        for i in range(14):
+                            file = os.path.join(images_dir, str(i) + '_'+ str(x) + '_trajectories.png')
+                            img_parameter_traj[i].save(file)
 
 
 def read_body_parts_file(key_points_file):
@@ -156,15 +160,13 @@ def read_body_parts_file(key_points_file):
 
 def compute_parameter_space(body_parts, max_distance, thetas, draw_body_ids=True):
     # Create image degrees x max_distance
-    img_parameter_space = Image.new('RGB', (180 + 20, int(max_distance/2)), color='black')
     points_parameter_space = {}
-    draw = ImageDraw.Draw(img_parameter_space)
     for i in range(0, 14, 1):
-        degree = degree_calc = theta = rho1 = rho2 = 0
+        degree = degree_disc = theta = rho1 = rho2 = 0
         x1, y1, x2, y2, color_id, id1, id2 = return_body_points_coord(i, body_parts)
         if x1 > 0 and y1 > 0 and x2 > 0 and y2 > 0:
-            print(i)
-            #print('x1:\t%i\ty1:\t%i\t\tx2:\t%i\ty2:\t%i' % (x1, y1, x2, y2))
+            #print(i)
+            # print('x1:\t%i\ty1:\t%i\t\tx2:\t%i\ty2:\t%i' % (x1, y1, x2, y2))
             if y1 - y2 != 0:
                 theta = np.arctan((x2 - x1) / (y1 - y2))
             else:
@@ -180,26 +182,13 @@ def compute_parameter_space(body_parts, max_distance, thetas, draw_body_ids=True
             # compute rho from theta
             rho1 = x1 * np.cos(theta) + y1 * np.sin(theta)
             rho2 = x2 * np.cos(theta) + y2 * np.sin(theta)
-            print(rho1, rho2)
+            #print(rho1, rho2)
 
-            print(int(rho1), int(degree), x1, y1)
-            # draw ellipse that represent body part in parameter space
-            draw.ellipse((degree_disc - 6, abs(rho1) - 6, degree_disc + 6, abs(rho1) + 6), fill=get_color(color_id))
-            # degree vs rho
-            if draw_body_ids:
-                font = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeMono.ttf', 10)
-                draw.text((degree, abs(rho1)), '%i-%i' % (id1, id2), font=font, fill=(255, 255, 255, 128))
+            #print(int(rho1), int(degree), x1, y1)
+        points_parameter_space[i] = (degree_disc, rho1, color_id)
+        # points_hough[i] = (degree, degree_disc, theta, int(rho))
 
-            #print('theta Calc:\t%.4f\t\trho Calc:\t\t%i' % (theta, rho1))
-            #print('Theta Find:\t%.4f\t\tAngulo:\t\t%.2f' % (position_min_degree, degree))
-            #print('\n')
-
-        points_parameter_space[i] = (degree, rho1)
-        #points_hough[i] = (degree, degree_disc, theta, int(rho))
-
-
-
-    return img_parameter_space, points_parameter_space
+    return points_parameter_space
 
 
 def return_body_points_coord(i, body_parts):

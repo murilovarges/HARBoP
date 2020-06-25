@@ -1,14 +1,10 @@
-# Description..: Convert Openpose json files with body parts to hough points
-# Date.........: 12/11/2018
-# Author.......: Murilo Varges da Silva
-
 import glob
 import json
 import os
 import argparse
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from skimage.transform import (hough_line, hough_line_peaks)
+from sklearn.preprocessing import MinMaxScaler
 
 POSE_BODY_25_PAIRS_RENDER_GPU = \
     [1, 8, 1, 2, 1, 5, 2, 3, 3, 4, 5, 6, 6, 7, 8, 9, 9, 10, 10, 11,
@@ -45,86 +41,99 @@ POSE_BODY_25_COLORS_RENDER_GPU = \
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compute features from Hough Points to Human Action Recognition"
+        description="Convert poses to Parameter Space to Human Action Recognition"
     )
 
-    parser.add_argument("--key_points_base_dir", type=str,
+    parser.add_argument("--poses_base_dir", type=str,
                         default='/home/murilo/dataset/KTH',
                         help="Name of directory where input points are located.")
 
     parser.add_argument("--input_dir", type=str,
-                        default='VideosTrainValidationTest_OP_PartKeys',
+                        default='2DPoses',
                         help="Name of directory to output computed features.")
 
-    parser.add_argument("--output_points_dir", type=str,
-                        default='VideosTrainValidationTest_Hough_points',
+    parser.add_argument("--output_dir", type=str,
+                        default='2DPoses_SpaceParam',
                         help="Name of directory to output computed features.")
 
     parser.add_argument("--output_images_dir", type=str,
-                        default='VideosTrainValidationTest_Hough_images',
-                        help="Name of directory to output hough images.")
+                        default='2DPoses_SpaceParam_Images',
+                        help="Name of directory to output Parameter Space images.")
 
     parser.add_argument("--image_height", type=int,
                         default='240',
-                        help="(Frame Size)Image height to compute max distance in hough space.")
+                        help="(Frame Size)Image height to compute max distance in Parameter Space.")
 
     parser.add_argument("--image_width", type=int,
                         default='320',
-                        help="(Frame Size)Image width to compute max distance in hough space.")
+                        help="(Frame Size)Image width to compute max distance in Parameter Space.")
 
     parser.add_argument("--save_image", type=int,
                         default='1',
-                        help="Whether save image with points in hough space.")
+                        help="Whether save image with points in Parameter Space.")
 
     parser.add_argument("--draw_body_ids", type=int,
                         default='1',
-                        help="Whether draw body ids in image with points in hough space.")
+                        help="Whether draw body joint ids in image with points in Parameter Space.")
+
+    parser.add_argument("--perform_minmax", type=int,
+                        default='0',
+                        help="Whether perform Min Max Scaler in data.")
 
     args = parser.parse_args()
-    compute_hough_point(args)
+    convert_parameter_space(args)
 
 
-def compute_hough_point(args):
-    # here compute image diagonal = max distance in hough space
+def convert_parameter_space(args):
+    # here compute image diagonal = max distance in Parameter Space
     max_distance = int(((args.image_height**2) + (args.image_width**2))**(1/2))
     print(max_distance)
 
     thetas = np.linspace(-np.pi / 2, np.pi / 2, 180)
 
-    key_points_dir = os.path.join(args.key_points_base_dir, args.input_dir)
+    poses_dir = os.path.join(args.poses_base_dir, args.input_dir)
 
     frames_ctd = 0
-    key_points_files = sorted(glob.glob(key_points_dir + "/**/*.json", recursive=True))
-    print('Frames to process: %i' % len(key_points_files))
-    for key_points_file in key_points_files:
+    poses_files = sorted(glob.glob(poses_dir + "/**/*.json", recursive=True))
+    print('Frames to process: %i' % len(poses_files))
+    for poses_file in poses_files:
         if frames_ctd % 100 == 0:
-            print('Frame: %i from: %i' % (frames_ctd, len(key_points_files)))
-            print(key_points_file)
+            print('Frame: %i from: %i' % (frames_ctd, len(poses_files)))
+            print(poses_file)
 
-        body_parts = read_body_parts_file(key_points_file)
+        body_parts = read_body_parts_file(poses_file)
         if len(body_parts) > 0:
-            file_name_points = os.path.basename(key_points_file)
-            points_hough_dir = key_points_file.replace(args.input_dir, args.output_points_dir)
-            points_hough_dir = os.path.dirname(points_hough_dir)
-            points_hough_name = os.path.join(points_hough_dir, file_name_points)
-            if not os.path.exists(points_hough_dir):
-                os.makedirs(points_hough_dir)
+            file_name_points = os.path.basename(poses_file)
+            points_space_parameter_dir = poses_file.replace(args.input_dir, args.output_dir)
+            points_space_parameter_dir = os.path.dirname(points_space_parameter_dir)
+            points_space_parameter_name = os.path.join(points_space_parameter_dir, file_name_points)
+            if not os.path.exists(points_space_parameter_dir):
+                os.makedirs(points_space_parameter_dir)
 
-            # compute hough point and draw image with points
-            img_hough, points_hough = draw_hough(body_parts, max_distance, thetas, args.draw_body_ids)
+            # compute parameter space points and draw image with points
+            img_parameter_space, points_parameter_space \
+                = compute_parameter_space(body_parts, max_distance, thetas, args.draw_body_ids)
 
-            with open(points_hough_name, 'w') as fjson:
-                json.dump(points_hough, fjson)
+            if args.perform_minmax:
+                scaler = MinMaxScaler()
+                scaler.fit(np.array(list(points_parameter_space.values())))
+                a = scaler.transform(np.array(list(points_parameter_space.values())))
+                #points_parameter_space_norm = {}
+                for i in range(0, 14, 1):
+                    points_parameter_space[i] = tuple(a[i])
+
+            with open(points_space_parameter_name, 'w') as fjson:
+                json.dump(points_parameter_space, fjson)
 
             if args.save_image:
-                file_name_img = os.path.basename(key_points_file)
+                file_name_img = os.path.basename(poses_file)
                 file_name_img = file_name_img.replace('_keypoints.json', '.png')
-                img_hough_dir = key_points_file.replace(args.input_dir, args.output_images_dir)
-                img_hough_dir = os.path.dirname(img_hough_dir)
-                img_hough_full_name = os.path.join(img_hough_dir, file_name_img)
-                if not os.path.exists(img_hough_dir):
-                    os.makedirs(img_hough_dir)
-                img_hough.save(img_hough_full_name)
+                img_space_parameter_dir = poses_file.replace(args.input_dir, args.output_images_dir)
+                img_space_parameter_dir = os.path.dirname(img_space_parameter_dir)
+                img_space_parameter_full_name = os.path.join(img_space_parameter_dir, file_name_img)
+                if not os.path.exists(img_space_parameter_dir):
+                    os.makedirs(img_space_parameter_dir)
+                img_parameter_space.save(img_space_parameter_full_name)
 
         frames_ctd = frames_ctd + 1
 
@@ -145,13 +154,13 @@ def read_body_parts_file(key_points_file):
     return body_parts_int
 
 
-def draw_hough(body_parts, max_distance, thetas, draw_body_ids=True):
+def compute_parameter_space(body_parts, max_distance, thetas, draw_body_ids=True):
     # Create image degrees x max_distance
-    img_hough = Image.new('RGB', (180 + 20, int(max_distance/2)), color='black')
-    points_hough = {}
-    draw = ImageDraw.Draw(img_hough)
+    img_parameter_space = Image.new('RGB', (180 + 20, int(max_distance/2)), color='black')
+    points_parameter_space = {}
+    draw = ImageDraw.Draw(img_parameter_space)
     for i in range(0, 14, 1):
-        degree = degree_calc = theta = rho1 = rho2 = 0
+        degree = degree_disc = theta = rho1 = rho2 = 0
         x1, y1, x2, y2, color_id, id1, id2 = return_body_points_coord(i, body_parts)
         if x1 > 0 and y1 > 0 and x2 > 0 and y2 > 0:
             print(i)
@@ -162,21 +171,21 @@ def draw_hough(body_parts, max_distance, thetas, draw_body_ids=True):
                 theta = 0
 
             # here convert theta from radians to degrees
-            degree_calc = int(round(theta * (180/np.pi)))
+            degree = round(theta * (180 / np.pi))
 
-            # here find theta in thetas discrete list
-            degree = min(range(len(thetas)), key=lambda x: abs(thetas[x] - theta))
-            position_min_degree = min(thetas, key=lambda x: abs(x - theta))
+            # here find theta in thetas discrete list (only for image plot)
+            degree_disc = min(range(len(thetas)), key=lambda x: abs(thetas[x] - theta))
+            # position_min_degree = min(thetas, key=lambda x: abs(x - theta))
 
             # compute rho from theta
             rho1 = x1 * np.cos(theta) + y1 * np.sin(theta)
             rho2 = x2 * np.cos(theta) + y2 * np.sin(theta)
-            #print(rho1,rho2)
+            print(rho1, rho2)
 
             print(int(rho1), int(degree), x1, y1)
-            # draw ellipse that represent body part in hough space
-            draw.ellipse((degree - 6, abs(rho1) - 6, degree + 6,abs(rho1) + 6), fill=get_color(color_id))
-
+            # draw ellipse that represent body part in parameter space
+            draw.ellipse((degree_disc - 6, abs(rho1) - 6, degree_disc + 6, abs(rho1) + 6), fill=get_color(color_id))
+            # degree vs rho
             if draw_body_ids:
                 font = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeMono.ttf', 10)
                 draw.text((degree, abs(rho1)), '%i-%i' % (id1, id2), font=font, fill=(255, 255, 255, 128))
@@ -185,10 +194,12 @@ def draw_hough(body_parts, max_distance, thetas, draw_body_ids=True):
             #print('Theta Find:\t%.4f\t\tAngulo:\t\t%.2f' % (position_min_degree, degree))
             #print('\n')
 
-        #points_hough.append((degree, degree_calc, theta,int(rho)))
-        points_hough[i] = (degree, degree_calc, theta, int(rho1))
+        #points_parameter_space[i] = (degree_disc, rho1)
+        points_parameter_space[i] = (degree, degree_disc, theta, int(rho1))
 
-    return img_hough, points_hough
+
+
+    return img_parameter_space, points_parameter_space
 
 
 def return_body_points_coord(i, body_parts):
@@ -232,72 +243,6 @@ def return_body_points_coord(i, body_parts):
         id2 = POSE_BODY_25_PAIRS_RENDER_GPU[x + 1]
 
     return x1, y1, x2, y2, color_id, id1, id2
-
-
-def draw_hough_body_part(body_ids, body_parts, height, width, thetas):
-    img = Image.new('1', (width, height), color='black')
-    draw = ImageDraw.Draw(img)
-
-    for i in body_ids:
-        x = 0
-        if i == 0:  # 1 => 0 Neck
-            x = 13
-        elif i == 1:  # 1 => 8 Upper body
-            x = 0
-        elif i == 2:  # 2 => 3 Right Arm
-            x = 3
-        elif i == 3:  # 3 => 4 Right Forearm
-            x = 4
-        elif i == 4:  # 5 => 6 Left Arm
-            x = 5
-        elif i == 5:  # 6 => 7 Left Forearm
-            x = 6
-        elif i == 6:  # 9 => 10 Right Thigh
-            x = 8
-        elif i == 7:  # 10 => 11 Right Leg
-            x = 9
-        elif i == 8:  # 12 => 13 Left Thigh
-            x = 11
-        elif i == 9:  # 13 => 14 Left Leg
-            x = 12
-
-        x = x * 2
-        if (len(body_parts[POSE_BODY_25_PAIRS_RENDER_GPU[x]]) > 0 and len(
-                body_parts[POSE_BODY_25_PAIRS_RENDER_GPU[x + 1]]) > 0):
-            x1, y1 = get_max_prob(body_parts[POSE_BODY_25_PAIRS_RENDER_GPU[x]])
-            x2, y2 = get_max_prob(body_parts[POSE_BODY_25_PAIRS_RENDER_GPU[x + 1]])
-
-            draw.line((x1, y1, x2, y2), fill='white')
-
-    # img.show()
-    img_nd = np.asarray(img, dtype="int32")
-    h, theta, d = hough_line(img_nd)
-    h1, theta1, d1 = hough_line_peaks(h, theta, d)
-    aaa = min(thetas, key=lambda x: abs(x - theta1[0]))
-
-    bbb = min(range(len(thetas)), key=lambda x: abs(thetas[x] - theta1[0]))
-    print('Theta Hough:\t%.4f\t\tp Hough:\t%i' % (theta1[0], d1[0]))
-    print('Theta Find:\t%.4f\t\tAngulo:\t\t%.2f' % (aaa, bbb))
-
-    h = h * 10
-    h_space_color = Image.fromarray(np.uint8(h)).convert('RGB')
-    pixels = h_space_color.load()
-    for lin in range(h_space_color.size[0]):  # for every pixel:
-        for col in range(h_space_color.size[1]):
-            if 0 in body_ids:
-                pixels[lin, col] = (pixels[lin, col][0], 0, 0)  # red
-            elif 2 in body_ids:
-                pixels[lin, col] = (0, pixels[lin, col][0], 0)  # green
-            elif 4 in body_ids:
-                pixels[lin, col] = (0, 0, pixels[lin, col][0])  # blue
-            elif 6 in body_ids:
-                pixels[lin, col] = (pixels[lin, col][0], pixels[lin, col][0], 0)  # yellow
-            elif 8 in body_ids:
-                pixels[lin, col] = (pixels[lin, col][0], 0, pixels[lin, col][0])  # pink
-
-    h_space_color.save('h_space_color_%i.png' % i)
-    # return h_space_color, h, theta, d, img_nd
-    return img
 
 
 def draw_body(body_parts, height, width):

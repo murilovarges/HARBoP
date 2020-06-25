@@ -1,6 +1,5 @@
 import os
 import smtplib
-import cv2
 import itertools
 import numpy as np
 from glob import glob
@@ -10,8 +9,6 @@ from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn import preprocessing
 import matplotlib
-import random
-from PukKernel import PukKernel
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from sklearn.decomposition import PCA
@@ -21,77 +18,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import COMMASPACE, formatdate
 from sklearn.externals import joblib
-from EnumTypes import ScalerType
+from tools.Utils.EnumTypes import ScalerType
 
-class ImageHelpers:
-    def __init__(self):
-        self.sift_object = cv2.xfeatures2d.SIFT_create()
-
-    def gray(self, image):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        return gray
-
-    def features(self, image):
-        keypoints, descriptors = self.sift_object.detectAndCompute(image, None)
-        return [keypoints, descriptors]
-
-    def featuresVideoSIFT3D(self, descFile):
-        descriptors = []
-        with open(descFile) as f:
-            for line in f:
-                inner_list = [elt.strip() for elt in line.split(',')]
-                descriptors.append(inner_list)
-        d = np.asarray(descriptors, dtype='float32')
-        return d
-
-    def featuresVideoHARRIS3D(self, descFile):
-        descriptors = []
-        with open(descFile) as f:
-            for line in f:
-                if line[0] == '#':
-                    continue
-                inner_list = [elt.strip() for elt in line.split(' ')]
-                data = inner_list[9:-1]
-                descriptors.append(data)
-        d = np.asarray(descriptors, dtype='float32')
-        return d
-
-    def featuresVideoC3D(self, descFile):
-        descriptors = []
-        with open(descFile) as f:
-            for line in f:
-                line = line.replace('[', '')
-                line = line.replace(']',  '')
-                inner_list = [elt.strip() for elt in line.split(',')]
-                data = inner_list[:]
-                descriptors.append(data)
-        descr = np.asarray(descriptors, dtype='float32')
-        label = descFile.split(os.sep)[-3]
-        return descr, label
-
-    def featuresVideoC3DConcat(self, descFile, base_path1, base_path2):
-        descriptors = []
-        with open(descFile) as f:
-            for line in f:
-                inner_list = [elt.strip() for elt in line.split(',')]
-                data1 = inner_list[:]
-
-        descFile = descFile.replace(base_path1, base_path2)
-        with open(descFile) as f:
-            for line in f:
-                inner_list = [elt.strip() for elt in line.split(',')]
-                data2 = inner_list[:]
-
-        descriptors.append(data1 + data2)
-        descr = np.asarray(descriptors, dtype='float32')
-        label = descFile.split(os.sep)[-3]
-        return descr, label
-
-
-# def featuresVideoOld(self, descFile):
-#	desc = np.loadtxt(descFile,dtype='float32',delimiter=',')
-#	#d = np.asarray(descriptors)
-#	return desc
 
 class ClassifierHelpers:
     def __init__(self, classifier=LinearSVC(random_state=0), no_clusters=100):
@@ -102,25 +30,8 @@ class ClassifierHelpers:
         self.features = None
         self.scale = None
         self.scaleCluster = None
-        # self.clf = SVC(C=100, kernel='poly')
-        # self.clf = SVC( kernel='rbf', C=100)
-        # self.clf = SVC( kernel='rbf', C=2, gamma=0.0002)
-        #self.clf = LinearSVC(random_state=0)
-        #self.clf = SVC()
         self.clf = classifier
-        self.PCA = PCA(n_components=30)
 
-    def pca(self, descriptor_list, train=False):
-        """
-		pca 
-		"""
-        scaler = StandardScaler().fit(descriptor_list)
-        descriptor_list = scaler.transform(descriptor_list);
-
-        if train:
-            self.PCA.fit(descriptor_list)
-
-        descriptor_list = self.PCA.transform(descriptor_list)
 
     def normalize_cluster(self, scaler_type_cluster):
         """
@@ -397,6 +308,15 @@ class FileHelpers:
         self.file_filters = fl_filters
         pass
 
+    def loadFeaturesFromFile(self, descFile):
+        descriptors = []
+        with open(descFile) as f:
+            for line in f:
+                inner_list = [elt.strip() for elt in line.split(',')]
+                descriptors.append(inner_list)
+        d = np.asarray(descriptors, dtype='float32')
+        return d
+
     def getLabelsFromFile(self, pathLabels):
         name_dict = {}
         number_dict = {}
@@ -410,144 +330,7 @@ class FileHelpers:
 
         return [name_dict, number_dict, label_count]
 
-    def getFilesFromList(self, path, list, number_dict=None, test=False, label_numeric=False):
-        """
-		- returns  a dictionary of all files 
-		having key => value as  objectname => image path
-
-		- returns total number of files.
-		"""
-        imlist = {}
-        count = 0
-        file = open(list, 'r')
-        for line in file:
-            line = line.replace('\n', '')
-            if len(line) == 0:
-                continue
-
-            searchDir = os.path.join(path, line)
-            if "vNonPorn" in line:
-                if label_numeric:
-                    label = number_dict['NonPorn']
-                else:
-                    label = 'NPornHard'
-
-                if not os.path.exists(searchDir):
-                    searchDir = os.path.join(path, 'vNonPornDifficulty', line)
-                    if not os.path.exists(searchDir):
-                        searchDir = os.path.join(path, 'vNonPornEasy', line)
-                        if label_numeric:
-                            label = number_dict['NonPorn']
-                        else:
-                            label = 'NPornEasy'
-
-                        if not os.path.exists(searchDir):
-                            continue
-            else:
-                if label_numeric:
-                    label = number_dict['Porn']
-                else:
-                    label = 'Porn'
-                if not os.path.exists(searchDir):
-                    searchDir = os.path.join(path, 'vPorn', line)
-                    if not os.path.exists(searchDir):
-                        continue
-
-            # if count > 200:
-            #    break
-
-            print(searchDir)
-            video = searchDir.split(os.sep)[-1]
-            print(" #### Reading Video ", video, " ##### ")
-            imlist[video] = []
-            c = 1
-            for each in sorted(glob(searchDir + os.sep + "*")):
-                # if c > 10:
-                #    break
-                print("Reading file ", each)
-                if test:
-                    imlist[video].append([each])
-                else:
-                    imlist[video].append([each, label])
-                count += 1
-                c += 1
-
-        return [imlist, count]
-
-
-    def getFilesFromDirectory(self, path, folders, number_dict=None, test=False, label_numeric=False):
-        """
-    		- returns  a dictionary of all files
-    		having key => value as  objectname => image path
-
-    		- returns total number of files.
-    		"""
-        img_list = {}
-        count = 0
-
-        for folder in folders:
-            search_dir = os.path.join(path, folder)
-            print(search_dir)
-            if label_numeric:
-                label = number_dict[folder]
-            else:
-                label = folder
-
-            videos = sorted(glob(search_dir + '/*'))
-            for video in videos:
-                video_name = video.split(os.sep)[-1]
-                print(" #### Reading Video ", video_name, " ##### ")
-                img_list[video_name] = []
-                c = 1
-                for each in sorted(glob(video + os.sep + "*%s*" % self.file_filters)):
-                    print("Reading file ", each)
-                    if test:
-                        img_list[video_name].append([each])
-                    else:
-                        img_list[video_name].append([each, label])
-                    count += 1
-                    c += 1
-
-        return [img_list, count]
-
-
-    def getFilesFromDirectoryLOOCV(self, path, datasets, folders, number_dict=None, test=False, label_numeric=False):
-        """
-    		- returns  a dictionary of all files
-    		having key => value as  objectname => image path
-
-    		- returns total number of files.
-    		"""
-        img_list = {}
-        count = 0
-
-        for dataset in datasets:
-            for folder in folders:
-                search_dir = os.path.join(path, dataset, folder)
-                print(search_dir)
-                if label_numeric:
-                    label = number_dict[folder]
-                else:
-                    label = folder
-
-                videos = sorted(glob(search_dir + '/*'))
-                for video in videos:
-                    video_name = video.split(os.sep)[-1]
-                    print(" #### Reading Video ", video_name, " ##### ")
-                    img_list[video_name] = []
-                    c = 1
-                    for each in sorted(glob(video + os.sep + "*%s*" % self.file_filters)):
-                        print("Reading file ", each)
-                        if test:
-                            img_list[video_name].append([each])
-                        else:
-                            img_list[video_name].append([each, label])
-                        count += 1
-                        c += 1
-
-        return [img_list, count]
-
-    def getFilesFromDirectoryLOOCV_BOW(self, path, datasets,  extension='*.txt'):
+    def getFilesFromDirectory(self, path, datasets,  extension='*.txt'):
         """
     		- returns  a dictionary of all files
     		having key => value as  objectname => image path
@@ -588,38 +371,11 @@ class FileHelpers:
                         #if c > 2:
                         #    break
 
+        #return [sorted(img_list), count]
         return [img_list, count]
 
 
-    def getFiles(self, path, returnImage=False, extension='*.txt'):
-        """
-		- returns  a dictionary of all files 
-		having key => value as  objectname => image path
 
-		- returns total number of files.
-
-		"""
-        imlist = {}
-        count = 0
-        for each in sorted(glob(path + "*")):
-            word = each.split(os.sep)[-1]
-            print(" #### Reading category ", word, " ##### ")
-            imlist[word] = []
-            c = 1
-            for imagefile in glob(path + word + os.sep + extension):
-                # if c > 1:
-                #	break
-                print("Reading file ", imagefile)
-                if returnImage:
-                    im = cv2.imread(imagefile, 0)
-                    imlist[word].append(im)
-                else:
-                    imlist[word].append(imagefile)
-
-                count += 1
-                c += 1
-
-        return [imlist, count]
 
 
 class MailHelpers:
