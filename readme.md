@@ -1,6 +1,6 @@
 # Human Action Recognition in Videos Based on Spatiotemporal Features and Bag-of-Poses
 
-[[Research Group Page](http://recogna.tech/)] [[Paper Link]()]
+[[Research Group Page](http://recogna.tech/)] [[Paper Link](http://www.sciencedirect.com/science/article/pii/S156849462030452X)]
 
 <h5>This repository presents a new method based spatiotemporal features and Bag-of-Poses to perform Human Action Recognition from videos.</h5> 
 
