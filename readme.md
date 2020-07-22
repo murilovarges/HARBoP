@@ -16,14 +16,20 @@ If you find this work helpful for your research, please cite our following paper
 M. Varges and A. N. Marana. **Human Action Recognition in Videos Based on Spatiotemporal Features and Bag-of-Poses.** Applied Soft Computing, 2020.
 
 ```
-@inproceedings{HARBop_asoc,
-    title = {Human Action Recognition in Videos Based on Spatiotemporal Features and Bag-of-Poses},
-    author = {Murilo Varges da Silva and Aparecido Nilceu Marana.},
-    booktitle = {Applied Soft Computing},
-    year = {2019},
-    keywords={Human Action Recognition, Surveillance Systems, Spatiotemporal Features, Video Sequences, Bag-of-Poses},
+@article{VARGESDASILVA2020106513,
+    title = "Human action recognition in videos based on spatiotemporal features and bag-of-poses",
+    journal = "Applied Soft Computing",
+    volume = "95",
+    pages = "106513",
+    year = "2020",
+    issn = "1568-4946",
+    doi = "https://doi.org/10.1016/j.asoc.2020.106513",
+    url = "http://www.sciencedirect.com/science/article/pii/S156849462030452X",
+    author = "Murilo {Varges da Silva} and Aparecido {Nilceu Marana}",
+    keywords = "Human action recognition, Surveillance systems, Spatiotemporal features, Video sequences, Bag-of-poses"
 }
 ```
+
 If you have any question or feedback about the code, please contact: murilo.varges@gmail.com.
 
 ## Requirements
