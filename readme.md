@@ -55,9 +55,9 @@ pip install -r requirements.txt
 ## Tutorials
 We provide some basic tutorials for you to get familar with the code and tools.
 1. [2D Poses Extraction](tutorials/2DPoses_extraction.md)
-2. [Features Extraction](tutorials/features_extraction.md)
-3. [Human Action Recognition](tutorials/classification.md)
-4. [Features Embedding Visualization](tutorials/features_visualization.md)
+2. [Encoding 2D Poses in Parameter Space](tutorials/2DPoses_spaceparam.md)
+3. [Features Extraction](tutorials/features_extraction.md)
+4. [Human Action Recognition](tutorials/classification.md)
 
 
 ## License

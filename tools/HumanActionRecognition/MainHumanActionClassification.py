@@ -23,9 +23,6 @@ def main():
                         default='*.*',
                         help="Filter for features files")
 
-    #parser.add_argument("--base_path", nargs='+', type=str, required=True,
-    #                    help="Base features path.")
-
     parser.add_argument("--base_path", type=str, required=True,
                         help="Base features path.")
 
@@ -44,25 +41,20 @@ def main():
                         help="C parameter for SVM classifier.")
 
     parser.add_argument("--use_train_test_val", type=int,
-                        default=1,
+                        default=0,
                         help="True if dataset is divides into train/test/validation.")
 
     args = parser.parse_args()
 
     print(args)
-    print(args.base_path)
-    print(args.features_file_filter[0])
-    #perform_loocv_fusion(args)
-    #perform_loocv_classifiers(args)
-    perform_loocv_fusion_new(args)
-    #if len(args.base_path) > 1:
-    #    perform_loocv_fusion(args)
-    #else:
-    #    perform_loocv_classifiers(args)
+
+    if args.base_path2 is not None:
+        perform_loocv_fusion(args)
+    else:
+        perform_loocv_classifiers(args)
 
 
-def perform_loocv_fusion_new(args):
-    # Instantiate Classifier
+def perform_loocv_fusion(args):
     list = []
     while len(list) < 100:
         random_number = np.random.randint(999)
@@ -74,7 +66,6 @@ def perform_loocv_fusion_new(args):
     for i in list:
         ctd = ctd + 1
         print('STEP ', i)
-        #random_number = np.random.randint(33)
         random_number = i
         print(random_number)
         test_name = args.test_name + '_' + str(ctd)
@@ -102,43 +93,7 @@ def perform_loocv_fusion_new(args):
         send_email_start(classifier, True)
 
         # train the model
-        #classifier.trainModelFV_LOOCV_Fusion_old()
-        classifier.trainModelFV_LOOCV_Fusion_old_gmm()
-
-
-def perform_loocv_fusion(args):
-    # Instantiate Classifier
-    classifier = Classifier(classifier=SVC(kernel='linear'), #classifier=LinearSVC(random_state=0, C=args.c_parameter),
-                            no_clusters=args.number_cluster,
-                            #gmm_random_state=0, 89.24
-                            #gmm_random_state=1, 87.09
-                            #gmm_random_state=99, 87.94
-                            #gmm_random_state=3, 87.09
-                            #gmm_random_state=13, 86.02
-                            #gmm_random_state=7, 87.09
-                            #gmm_random_state=5, 86.02
-                            #gmm_random_state=17, 87.09
-                            gmm_random_state=0,
-                            no_samples=None)
-
-    classifier.OsName = platform.system()
-    print('Operating System: ', classifier.OsName)
-    print('LOOCV Fusion')
-
-    classifier.test_name = args.test_name
-    classifier.aggregateVideoFeatures = False
-    if args.use_train_test_val:
-        classifier.datasets = ['training', 'validation', 'test']
-
-    classifier.base_path = args.base_path
-    classifier.features_file_filter = args.features_file_filter
-    classifier.label_path = args.label_path
-
-    # Send e-mail Process Start
-    send_email_start(classifier, True)
-
-    # train the model
-    classifier.trainModelFV_LOOCV_Fusion()
+        classifier.trainModelFV_LOOCV_Fusion()
 
 
 def perform_loocv_classifiers(args):

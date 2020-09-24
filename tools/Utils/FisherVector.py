@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.datasets import make_classification
-from sklearn.mixture import GMM
-#from sklearn.mixture import GaussianMixture as GMM
+#from sklearn.mixture import GMM
+from sklearn.mixture import GaussianMixture as GMM
 from sklearn.preprocessing import StandardScaler
 from sklearn import svm
 
@@ -75,8 +75,8 @@ def fisher_vector(xx, gmm):
     d_sigma = (
         - Q_xx_2
         - Q_sum * gmm.means_ ** 2
-        + Q_sum * gmm.covars_
-        #+ Q_sum * gmm.covariances_
+        #+ Q_sum * gmm.covars_
+        + Q_sum * gmm.covariances_
         + 2 * Q_xx * gmm.means_)
 
     # Merge derivatives into a vector.

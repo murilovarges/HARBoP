@@ -1,3 +1,5 @@
+import sys
+sys.path.append('.')
 import csv
 import datetime
 import errno
@@ -6,14 +8,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import confusion_matrix
-from sklearn.mixture import GMM
+from sklearn.mixture import GaussianMixture as GMM
 from sklearn.model_selection import LeaveOneOut
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
 from sklearn.svm import SVC
-#from tools.Utils.EnumTypes import ScalerType
 from tools.Utils.EnumTypes import ScalerType
-# from sklearn.mixture import GaussianMixture as GMM
 from tools.Utils.FisherVector import power_normalize, L2_normalize, fisher_vector
 from tools.Utils.Helpers import ClassifierHelpers, FileHelpers, MailHelpers
 
@@ -139,7 +139,7 @@ class Classifier:
 
         return feature_train, labels_train
 
-    def trainModelFV_LOOCV_Fusion_old_gmm(self, extension='*.*'):
+    def trainModelFV_LOOCV_Fusion(self, extension='*.*'):
         """
         This method contains the entire module
         required for training the Bag of Poses model
@@ -328,338 +328,6 @@ class Classifier:
             self.saveResults(predictions, pre, lab, features_nd1.shape[0])
 
 
-    def trainModelFV_LOOCV_Fusion_old(self, extension='*.*'):
-        """
-        This method contains the entire module
-        required for training the Bag of Poses model
-        Use of helper functions will be extensive.
-        """
-
-        print('trainModelFV_LOOCV_Fusion_old')
-        self.name_dict, self.number_dict, self.count_class = self.file_helper.getLabelsFromFile(self.label_path)
-
-        # read file. prepare file lists.
-        self.files1, self.trainFilesCount1 = self.file_helper.getFilesFromDirectory(self.base_path,
-                                                                                    self.datasets,
-                                                                                    extension)
-
-        self.files2, self.trainFilesCount2 = self.file_helper.getFilesFromDirectory(self.base_path2,
-                                                                                    self.datasets,
-                                                                                    extension)
-
-        self.parameters += 'Classifier Parameters\n'
-        self.parameters += '%s' % self.classifier_helper.clf
-
-        features_nd1 = np.asarray(self.files1)
-        features_nd2 = np.asarray(self.files2)
-
-        features_nd1.sort(axis=0)
-        features_nd2.sort(axis=0)
-
-        loo = LeaveOneOut()
-        predictions = []
-        pre = []
-        lab = []
-        hits = 0
-        c = 0
-        for train, test in loo.split(features_nd1):
-            feature_test_file1 = str(features_nd1[test][0][0])
-            feature_test_file2 = str(features_nd2[test][0][0])
-
-            class_name_test = feature_test_file1.split(os.sep)[-2]
-            c += 1
-
-            currenInvDate = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            print('Step: %i/%i - %s\n%s\n%s' % (c, features_nd1.shape[0], currenInvDate,
-                                                feature_test_file1, feature_test_file2))
-            if c == 1 or c % 25 == 0:
-                self.mail_helper.sendMail("Progress: %s - %s" % (self.test_name, self.OsName),
-                                          "Samples processed: %i" % c)
-
-            self.descriptor_list1 = []
-            self.descriptor_list2 = []
-            self.train_labels = []
-            for feature in features_nd1[train]:
-                feature = feature[0]
-                label_number = self.number_dict[feature.split(os.sep)[-2]]
-                self.train_labels = np.append(self.train_labels, label_number)
-                des1 = self.file_helper.loadFeaturesFromFile(feature)
-                self.descriptor_list1.append(des1)
-
-            for feature in features_nd2[train]:
-                feature = feature[0]
-                des2 = self.file_helper.loadFeaturesFromFile(feature)
-                self.descriptor_list2.append(des2)
-
-            # format data as nd array
-            ft1 = self.classifier_helper.formatND(self.descriptor_list1)
-            ft2 = self.classifier_helper.formatND(self.descriptor_list2)
-            print('GMM random:', self.gmm_random_state)
-            gmm1 = GMM(n_components=self.no_clusters,
-                       covariance_type='diag',
-                       #random_state=self.gmm_random_state,
-                       verbose=0)
-            gmm1.fit(ft1)
-
-            gmm2 = GMM(n_components=self.no_clusters,
-                       covariance_type='diag',
-                       #random_state=self.gmm_random_state,
-                       verbose=0)
-            gmm2.fit(ft2)
-
-            fv_dim1 = self.no_clusters + 2 * self.no_clusters * ft1.shape[1]
-            fv_dim2 = self.no_clusters + 2 * self.no_clusters * ft2.shape[1]
-            print(fv_dim1, fv_dim2)
-            n_videos = train.shape[0]
-            features1 = np.array([np.zeros(fv_dim1) for i in range(n_videos)])
-            features2 = np.array([np.zeros(fv_dim2) for i in range(n_videos)])
-            count1 = 0
-            count2 = 0
-            for i in range(n_videos):
-                len_video1 = len(self.descriptor_list1[i])
-                fv1 = fisher_vector(ft1[count1:count1 + len_video1], gmm1)
-                features1[i] = fv1
-                count1 += len_video1
-
-                len_video2 = len(self.descriptor_list2[i])
-                fv2 = fisher_vector(ft2[count2:count2 + len_video2], gmm2)
-                features2[i] = fv2
-                count2 += len_video2
-
-            print(features1.shape)
-            print('Data normalization. 1')
-            scaler1 = StandardScaler()
-            # train normalization
-            features1 = scaler1.fit_transform(features1)
-            features1 = power_normalize(features1, 0.5)
-            features1 = L2_normalize(features1)
-
-            print(features2.shape)
-            print('Data normalization. 2')
-            scaler2 = StandardScaler()
-            # train normalization
-            features2 = scaler2.fit_transform(features2)
-            features2 = power_normalize(features2, 0.5)
-            features2 = L2_normalize(features2)
-
-            # real label
-            lab.extend([self.number_dict[feature_test_file1.split(os.sep)[-2]]])
-
-            # test features 1
-            feature_test1 = self.file_helper.loadFeaturesFromFile(feature_test_file1)
-            test_fv1 = fisher_vector(feature_test1, gmm1)
-            # train normalization
-            test_fv1 = test_fv1.reshape(1, -1)
-            test_fv1 = scaler1.transform(test_fv1)
-            test_fv1 = power_normalize(test_fv1, 0.5)
-            test_fv1 = L2_normalize(test_fv1)
-
-            # test features 2
-            feature_test2 = self.file_helper.loadFeaturesFromFile(feature_test_file2)
-            test_fv2 = fisher_vector(feature_test2, gmm2)
-            # train normalization
-            test_fv2 = test_fv2.reshape(1, -1)
-            test_fv2 = scaler2.transform(test_fv2)
-            test_fv2 = power_normalize(test_fv2, 0.5)
-            test_fv2 = L2_normalize(test_fv2)
-
-            ## concatenate two fv test
-            feature_test = np.concatenate((test_fv1, test_fv2), axis=1).reshape(1, -1)
-
-            ## concatenate two fv train
-            feature_train = np.concatenate((features1, features2), axis=1)
-
-            # train classifiers
-            self.classifier_helper.clf.fit(feature_train, self.train_labels)
-            cl = int(self.classifier_helper.clf.predict(feature_test)[0])
-            class_name_predict = self.name_dict[str(cl)]
-            if class_name_test == class_name_predict:
-                hits += 1
-
-            error = c - hits
-            msg_progress = 'Hits: %i/%i  -  Accuracy: %.4f  -   Error: %i\n\n' % (hits, c, hits / c, error)
-
-            print(msg_progress)
-            if c % 25 == 0:
-                self.mail_helper.sendMail("Progress: %s - %s" % (self.test_name, self.OsName), msg_progress)
-
-            if error > 2:
-                save = False
-                print('Error excedded')
-                break
-
-            # predicted label
-            pre.extend([cl])
-            predictions.append({
-                'image1': feature_test_file1,
-                'image2': feature_test_file2,
-                'class': cl,
-                'object_name': self.name_dict[str(cl)]
-            })
-
-        if save:
-            self.saveResults(predictions, pre, lab, features_nd1.shape[0])
-
-    def trainModelFV_LOOCV_Fusion(self):
-        """
-        This method contains the entire module
-        required for training the bag of visual words model
-        Use of helper functions will be extensive.
-        """
-        print('trainModelFV_LOOCV_Fusion')
-        save = True
-        self.name_dict, self.number_dict, self.count_class = self.file_helper.getLabelsFromFile(self.label_path)
-        for count, base_path in enumerate(self.base_path):
-            # read file. prepare file lists.
-            self.images[count], self.trainImageCount[count] = \
-                self.file_helper.getFilesFromDirectory(base_path,
-                                                    self.datasets,
-                                                    self.features_file_filter[count])
-
-        self.parameters += 'Classifier Parameters\n'
-        self.parameters += '%s' % self.classifier_helper.clf
-
-        loo = LeaveOneOut()
-        predictions = []
-        pre = []
-        lab = []
-        # new lists
-        feature_test_file = {}
-        features_nd = {}
-        hits = 0
-        c = 0
-        # Initialize features nd array
-        for count, _ in enumerate(self.base_path):
-            features_nd[count] = np.asarray(self.images[count])
-            #features_nd[count].sort(axis=0)
-
-        # Perform Leave-One-Out Cross-Validation (LOOCV)
-        print(len(features_nd))
-        for train, test in loo.split(features_nd[0]):
-            c += 1
-            currentInvDate = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            print('Step: %i/%i - %s' % (c, features_nd[0].shape[0], currentInvDate))
-            for count, _ in enumerate(self.base_path):
-                feature_test_file[count] = str(features_nd[count][test][0][0])
-                print('%s' % (feature_test_file[count]))
-
-            class_name_test = feature_test_file[0].split(os.sep)[-2]
-
-            self.descriptor_list = {}
-            self.train_labels = []
-            ft = {}
-            gmm = {}
-            fv_dim = {}
-            features = {}
-            n_videos = train.shape[0]
-            scaler_des = {}
-
-            # Read features from files and compute Gaussian Mixture Models (GMM)
-            for count, _ in enumerate(self.base_path):
-                self.descriptor_list[count] = []
-                for feature in features_nd[count][train]:
-                    feature = feature[0]
-                    if count == 0:
-                        label_number = self.number_dict[feature.split(os.sep)[-2]]
-                        self.train_labels = np.append(self.train_labels, label_number)
-                    des = self.file_helper.loadFeaturesFromFile(feature)
-                    self.descriptor_list[count].append(des)
-                ft[count] = self.classifier_helper.formatND(self.descriptor_list[count])
-                norm = False
-                if norm:
-                    scaler_des[count] = StandardScaler()
-                    # train normalization
-                    ft[count] = scaler_des[count].fit_transform(ft[count])
-
-                print('Randon state: ', self.gmm_random_state)
-                gmm[count] = GMM(n_components=self.no_clusters,
-                                 covariance_type='diag',
-                                 random_state=self.gmm_random_state,
-                                 verbose=0)
-                gmm[count].fit(ft[count])
-                fv_dim[count] = self.no_clusters + 2 * self.no_clusters * ft[count].shape[1]
-                print(fv_dim[count])
-                features[count] = np.array([np.zeros(fv_dim[count]) for i in range(n_videos)])
-
-            len_video = {}
-            fv = {}
-            scaler = {}
-
-            # Compute Fisher Vector from Descriptors using GMM
-            for count, _ in enumerate(self.base_path):
-                count_videos = 0
-                for i in range(n_videos):
-                    len_video[count] = len(self.descriptor_list[count][i])
-                    fv[count] = fisher_vector(ft[count][count_videos:count_videos + len_video[count]], gmm[count])
-                    features[count][i] = fv[count]
-                    count_videos += len_video[count]
-
-            # Perform FV Normalization
-            for count, _ in enumerate(self.base_path):
-                print(features[count].shape)
-                print('Data normalization. %i' % count)
-                scaler[count] = StandardScaler()
-                # train normalization
-                features[count] = scaler[count].fit_transform(features[count])
-                features[count] = power_normalize(features[count], 0.5)
-                features[count] = L2_normalize(features[count])
-
-            # Prepare test data and label
-            lab.extend([self.number_dict[feature_test_file[0].split(os.sep)[-2]]])
-            feature_test = {}
-            test_fv = {}
-            for count, _ in enumerate(self.base_path):
-                feature_test[count] = self.file_helper.loadFeaturesFromFile(feature_test_file[count])
-                if norm:
-                    feature_test[count] = scaler_des[count].transform(feature_test[count])
-                    print('Feature scaler')
-
-                test_fv[count] = fisher_vector(feature_test[count], gmm[count])
-                # train normalization
-                test_fv[count] = test_fv[count].reshape(1, -1)
-                test_fv[count] = scaler[count].transform(test_fv[count])
-                test_fv[count] = power_normalize(test_fv[count], 0.5)
-                test_fv[count] = L2_normalize(test_fv[count])
-
-            # Concatenate FV for each feature type
-            feature_test = test_fv[0]
-            feature_train = features[0]
-            for count in range(1, len(self.base_path)):
-                feature_test = np.concatenate((feature_test, test_fv[count]), axis=1)
-                feature_train = np.concatenate((feature_train, features[count]), axis=1)
-            feature_test.reshape(1, -1)
-
-            # Train classifiers
-            self.classifier_helper.clf.fit(feature_train, self.train_labels)
-
-            # Perform test
-            cl = int(self.classifier_helper.clf.predict(feature_test)[0])
-            class_name_predict = self.name_dict[str(cl)]
-            if class_name_test == class_name_predict:
-                hits += 1
-
-            error = c - hits
-            msg_progress = 'Hits: %i/%i  -  Accuracy: %.4f  -   Error: %i\n\n' % (hits, c, hits / c, error)
-
-            print(msg_progress)
-            if c % 25 == 0:
-                self.mail_helper.sendMail("Progress: %s - %s" % (self.test_name, self.OsName), msg_progress)
-
-            if error > 3:
-                save = False
-                print('Error excedded')
-                break
-
-            # predicted label
-            pre.extend([cl])
-            predictions.append({
-                'videos': feature_test_file,
-                'class': cl,
-                'object_name': self.name_dict[str(cl)]
-            })
-        if save:
-            self.saveResults(predictions, pre, lab, features_nd[0].shape[0])
-
     def trainModelFV_LOOCV_Classifiers(self, extension='*.txt'):
         """
         This method contains the entire module
@@ -674,9 +342,9 @@ class Classifier:
         self.name_dict, self.number_dict, self.count_class = self.file_helper.getLabelsFromFile(self.label_path)
 
         # read file. prepare file lists.
-        self.images, self.trainImageCount = self.file_helper.getFilesFromDirectory(self.base_path[0],
+        self.images, self.trainImageCount = self.file_helper.getFilesFromDirectory(self.base_path,
                                                                                    self.datasets,
-                                                                                   extension[0])
+                                                                                   extension)
 
         self.parameters += 'Classifier Parameters\n'
         self.parameters += '%s' % self.classifier_helper.clf
@@ -715,9 +383,7 @@ class Classifier:
             # format data as nd array
             self.classifier_helper.formatND(self.descriptor_list)
             #print('Random state: ', self.gmm_random_state)
-            gmm = GMM(n_components=self.no_clusters,
-                      #random_state=self.gmm_random_state,
-                      covariance_type='diag')
+            gmm = GMM(n_components=self.no_clusters, covariance_type='diag')
             gmm.fit(self.classifier_helper.descriptor_vstack)
 
             fv_dim = self.no_clusters + 2 * self.no_clusters * self.classifier_helper.descriptor_vstack.shape[1]

@@ -1,5 +1,7 @@
+import sys
+sys.path.append('.')
 import glob
-from Enumerators import BodyStraight
+from tools.Utils.EnumBody import BodyStraight
 import json
 import os
 import argparse
@@ -110,7 +112,7 @@ def compute_angles_differences(body_parts, rad=True):
                 y_base = coords[0][3]
                 v1_idx = 0
                 v2_idx = 2
-            elif (coords[0][2] == coords[1][1] and
+            elif (coords[0][2] == coords[1][2] and
                   coords[0][3] == coords[1][3]):
                 x_base = coords[0][2]
                 y_base = coords[0][3]

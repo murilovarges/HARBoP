@@ -1,6 +1,8 @@
-# Description..: Reads OpenPose json files with body parts and considere only files with person
-# Date.........: 21/03/2019
-# Author.......: Murilo Varges da Silva
+"""
+Description..: Reads OpenPose json files with body parts and considere only files with person
+Date.........: 21/03/2019
+Author.......: Murilo Varges da Silva
+"""
 
 import glob
 import os

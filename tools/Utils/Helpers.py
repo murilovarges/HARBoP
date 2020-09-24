@@ -351,9 +351,6 @@ class FileHelpers:
                     print("Reading file ", featuresfile)
                     img_list.append([featuresfile])
                     count += 1
-                    #c += 1
-                    #if c > 5:
-                    #    break
         else:
             for dataset in datasets:
                 search_dir = os.path.join(path, dataset)
@@ -367,15 +364,8 @@ class FileHelpers:
                         print("Reading file ", featuresfile)
                         img_list.append([featuresfile])
                         count += 1
-                        #c += 1
-                        #if c > 2:
-                        #    break
 
-        #return [sorted(img_list), count]
         return [img_list, count]
-
-
-
 
 
 class MailHelpers:
