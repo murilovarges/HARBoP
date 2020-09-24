@@ -41,7 +41,7 @@ Weizmann dataset example:
 ```
 python tools/FeaturesExtraction/PEF/compute_trajectories_from_parameter_space.py \
 --space_param_base_dir=/home/murilo/dataset/Weizmann \
---input_dir=2DPoses \
+--input_dir=2DPoses_SpaceParam \
 --output_dir=2DPoses_SpaceParam_Trajectories \
 --number_frames=20 --stride=1
 ```
