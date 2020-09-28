@@ -55,51 +55,34 @@ def main():
 
 
 def perform_loocv_fusion(args):
-    list = []
-    while len(list) < 100:
-        random_number = np.random.randint(999)
-        if random_number not in list:
-            list.append(random_number)
+    classifier = Classifier(classifier=SVC(kernel='linear'),
+                            no_clusters=args.number_cluster,
+                            no_samples=None)
 
-    print(list)
-    ctd = 0
-    for i in list:
-        ctd = ctd + 1
-        print('STEP ', i)
-        random_number = i
-        print(random_number)
-        test_name = args.test_name + '_' + str(ctd)
-        print(test_name)
-        classifier = Classifier(classifier=SVC(kernel='linear'),
-                                no_clusters=args.number_cluster,
-                                gmm_random_state=random_number,
-                                no_samples=None)
+    classifier.OsName = platform.system()
+    print('Operating System: ', classifier.OsName)
+    print('LOOCV Fusion')
 
-        classifier.OsName = platform.system()
-        print('Operating System: ', classifier.OsName)
-        print('LOOCV Fusion')
+    classifier.test_name = args.test_name
+    classifier.aggregateVideoFeatures = False
+    if args.use_train_test_val:
+        classifier.datasets = ['training', 'validation', 'test']
 
-        classifier.test_name = test_name
-        classifier.aggregateVideoFeatures = False
-        if args.use_train_test_val:
-            classifier.datasets = ['training', 'validation', 'test']
+    classifier.base_path = args.base_path
+    classifier.base_path2 = args.base_path2
+    classifier.features_file_filter = args.features_file_filter
+    classifier.label_path = args.label_path
 
-        classifier.base_path = args.base_path
-        classifier.base_path2 = args.base_path2
-        classifier.features_file_filter = args.features_file_filter
-        classifier.label_path = args.label_path
+    # Send e-mail Process Start
+    send_email_start(classifier, True)
 
-        # Send e-mail Process Start
-        send_email_start(classifier, True)
-
-        # train the model
-        classifier.trainModelFV_LOOCV_Fusion()
+    # train the model
+    classifier.trainModelFV_LOOCV_Fusion()
 
 
 def perform_loocv_classifiers(args):
     # Instantiate Classifier
     classifier = Classifier(classifier=None,
-                            gmm_random_state=99,
                             no_clusters=args.number_cluster,
                             no_samples=None)
 
@@ -127,7 +110,6 @@ def send_email_start(classifier, send=True):
     current_date = datetime.datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
     classifier.parameters = 'Parameters\n'
     classifier.parameters += 'Test Name: %s\n' % classifier.test_name
-    classifier.parameters += 'GMM Random State: %s\n' % classifier.gmm_random_state
     classifier.parameters += 'Base Path: %s\n' % classifier.base_path
     classifier.parameters += 'Base Path2: %s\n' % classifier.base_path2
     classifier.parameters += 'Train Path: %s\n' % classifier.train_path

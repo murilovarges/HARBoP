@@ -23,11 +23,9 @@ class Classifier:
                  classifier=LinearSVC(random_state=0),
                  fl_filters=None,
                  results_file=None,
-                 gmm_random_state=0,
                  no_clusters=100,
                  no_samples=800):
         self.no_clusters = no_clusters
-        self.gmm_random_state = gmm_random_state
         self.no_samples = no_samples
         self.OsName = None
         self.scaler_type = ScalerType.StandardScaler
@@ -180,16 +178,14 @@ class Classifier:
 
         ft1 = self.classifier_helper.formatND(self.descriptor_list1)
         ft2 = self.classifier_helper.formatND(self.descriptor_list2)
-        print('GMM random:', self.gmm_random_state)
+
         gmm1 = GMM(n_components=self.no_clusters,
                    covariance_type='diag',
-                   #random_state=self.gmm_random_state,
                    verbose=0)
         gmm1.fit(ft1)
 
         gmm2 = GMM(n_components=self.no_clusters,
                    covariance_type='diag',
-                   random_state=self.gmm_random_state,
                    verbose=0)
         gmm2.fit(ft2)
 
@@ -382,7 +378,7 @@ class Classifier:
 
             # format data as nd array
             self.classifier_helper.formatND(self.descriptor_list)
-            #print('Random state: ', self.gmm_random_state)
+
             gmm = GMM(n_components=self.no_clusters, covariance_type='diag')
             gmm.fit(self.classifier_helper.descriptor_vstack)
 
