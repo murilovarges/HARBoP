@@ -197,8 +197,6 @@ def compute_parameter_space(body_parts, max_distance, thetas, draw_body_ids=True
         #points_parameter_space[i] = (degree_disc, rho1)
         points_parameter_space[i] = (degree, degree_disc, theta, int(rho1))
 
-
-
     return img_parameter_space, points_parameter_space
 
 
